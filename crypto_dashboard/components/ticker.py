@@ -11,7 +11,8 @@ class CryptoTicker(tk.Frame):
     """
     
     def __init__(self, parent, symbol, display_name):
-        super().__init__(parent, bg=CARD_COLOR, padx=20, pady=10)
+        # Added border styling: highlightthickness=1, highlightbackground="#2b3139" (lighter than bg)
+        super().__init__(parent, bg=CARD_COLOR, padx=20, pady=10, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
@@ -39,12 +40,19 @@ class CryptoTicker(tk.Frame):
         self._create_stat_panel("24h VOL", 5, "vol_label", TEXT_COLOR, font_val=FONT_SUBTITLE)
         
     def _create_stat_panel(self, title, col, var_name, color, font_val):
-        frame = tk.Frame(self, bg=CARD_COLOR)
-        frame.grid(row=0, column=col, sticky="w", padx=15)
+        # Create a container frame for the padding
+        container = tk.Frame(self, bg=CARD_COLOR)
+        container.grid(row=0, column=col, sticky="nsew", padx=5, pady=5)
         
-        tk.Label(frame, text=title, font=("Arial", 10, "bold"), fg=TEXT_SECONDARY, bg=CARD_COLOR).pack(anchor="w")
-        lbl = tk.Label(frame, text="--", font=font_val, fg=color, bg=CARD_COLOR)
-        lbl.pack(anchor="w")
+        # Create the visible "box" frame
+        # Use a slightly lighter background for the box to make it stand out like the image
+        box_color = "#252930" 
+        frame = tk.Frame(container, bg=box_color, padx=10, pady=5)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        tk.Label(frame, text=title, font=("Arial", 9), fg=TEXT_SECONDARY, bg=box_color, anchor="w").pack(fill=tk.X)
+        lbl = tk.Label(frame, text="--", font=font_val, fg=color, bg=box_color, anchor="w")
+        lbl.pack(fill=tk.X)
         setattr(self, var_name, lbl)
     
     def start(self):
@@ -90,7 +98,8 @@ class CryptoTicker(tk.Frame):
                 self.after(0, lambda: self.low_label.config(text=f"${low:,.2f}"))
                 self.after(0, lambda: self.vol_label.config(text=f"{vol:,.2f}"))
                 
-            elif event_type == 'bookTicker':
+            elif event_type == 'bookTicker' or ('b' in payload and 'a' in payload):
+                # Sometimes bookTicker object is just the dict
                 bid = float(payload['b'])
                 ask = float(payload['a'])
                 self.after(0, lambda: self.bid_label.config(text=f"${bid:,.2f}"))

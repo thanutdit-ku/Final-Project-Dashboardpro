@@ -13,6 +13,7 @@ class CryptoDashboard:
         self.root = root
         self.root.title(WINDOW_TITLE)
         self.root.geometry(WINDOW_SIZE)
+        self.root.minsize(1000, 600) # Prevent making it too small
         self.root.configure(bg=BG_COLOR)
         
         # Configure Grid Layout
@@ -38,19 +39,39 @@ class CryptoDashboard:
         # State
         self.current_symbol_info = SYMBOLS[0]
         self.components = []
+        self.symbol_buttons = {}
         
         self.setup_sidebar()
         self.setup_main_view()
         
     def setup_sidebar(self):
-        tk.Label(self.sidebar, text="MARKETS", font=FONT_TITLE, bg=CARD_COLOR, fg=TEXT_COLOR).pack(pady=20)
+        # App Title in Sidebar
+        tk.Label(self.sidebar, text="Crypto\nDashboard", font=("Arial", 18, "bold"), bg=CARD_COLOR, fg="#4fa3ff").pack(pady=(20, 10))
+        
+        # Section Title
+        tk.Label(self.sidebar, text="MARKETS", font=("Arial", 14, "bold"), bg=CARD_COLOR, fg=TEXT_COLOR).pack(pady=10)
         
         for sym in SYMBOLS:
+            symbol_key = sym['symbol']
+            # Determine initial color - Use a distinct color for active, and a lighter dark for inactive to be visible
+            is_active = symbol_key == self.current_symbol_info['symbol']
+            
+            # Button Styling
+            # User wanted "visible frame". We use relief and border.
+            bg_color = "#2b3139" if is_active else "#161a1e"
+            fg_color = "#ffffff" if is_active else "#848e9c"
+            
+            # Using a Frame to create a "box" effect if standard button border isn't enough, 
+            # but standard button with bd=2 and relief should work.
             btn = tk.Button(self.sidebar, text=sym['name'], 
-                            bg=BG_COLOR, fg=TEXT_COLOR, 
-                            bd=0, font=("Arial", 12),
+                            bg=bg_color, fg=fg_color,
+                            activebackground="#2b3139", activeforeground="#ffffff",
+                            bd=2, relief="groove", # Visible frame
+                            font=("Arial", 12, "bold"),
+                            cursor="hand2",
                             command=partial(self.switch_symbol, sym))
-            btn.pack(fill=tk.X, pady=5, padx=10)
+            btn.pack(fill=tk.X, pady=5, padx=15, ipady=5) # ipady for taller buttons
+            self.symbol_buttons[symbol_key] = btn
             
     def setup_main_view(self):
         # Clear existing components
@@ -61,7 +82,7 @@ class CryptoDashboard:
         
         # 1. Header Section (Ticker + Stats)
         header_frame = tk.Frame(self.main_area, bg=BG_COLOR)
-        header_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=10)
+        header_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=5)
         
         # Ticker Component 
         self.ticker = CryptoTicker(header_frame, self.current_symbol_info['symbol'], self.current_symbol_info['name'])
@@ -70,23 +91,23 @@ class CryptoDashboard:
         
         # Volume Stats
         self.vol_stats = VolumeStatsPanel(header_frame, self.current_symbol_info['symbol'])
-        self.vol_stats.pack(side=tk.RIGHT, padx=10)
+        self.vol_stats.pack(side=tk.RIGHT, padx=5)
         self.components.append(self.vol_stats)
         
         # 2. Main Content
         # Left: Order Book
         self.ob_panel = OrderBookPanel(self.main_area, self.current_symbol_info['symbol'])
-        self.ob_panel.grid(row=1, column=0, sticky="nsew", padx=5, pady=(0, 10))
+        self.ob_panel.grid(row=1, column=0, sticky="nsew", padx=5, pady=(0, 5))
         self.components.append(self.ob_panel)
         
         # Center: Chart
         self.chart_panel = ChartPanel(self.main_area, self.current_symbol_info['symbol'])
-        self.chart_panel.grid(row=1, column=1, sticky="nsew", padx=5, pady=(0, 10))
+        self.chart_panel.grid(row=1, column=1, sticky="nsew", padx=5, pady=(0, 5))
         self.components.append(self.chart_panel)
         
         # Right: Trades Feed
         self.trades_panel = TradesFeedPanel(self.main_area, self.current_symbol_info['symbol'])
-        self.trades_panel.grid(row=1, column=2, sticky="nsew", padx=5, pady=(0, 10))
+        self.trades_panel.grid(row=1, column=2, sticky="nsew", padx=5, pady=(0, 5))
         self.components.append(self.trades_panel)
         
         # Start all
@@ -96,9 +117,19 @@ class CryptoDashboard:
     def switch_symbol(self, symbol_info):
         if self.current_symbol_info == symbol_info: return
         print(f"Switching to {symbol_info['name']}")
+        
+        # Update buttons
+        old_sym = self.current_symbol_info['symbol']
+        new_sym = symbol_info['symbol']
+        
+        if old_sym in self.symbol_buttons:
+            self.symbol_buttons[old_sym].config(bg="#161a1e", fg="#848e9c")
+        if new_sym in self.symbol_buttons:
+            self.symbol_buttons[new_sym].config(bg="#2b3139", fg="#ffffff")
+            
         self.current_symbol_info = symbol_info
         
-        # Rebuild view (easiest way to ensure clean state)
+        # Rebuild view
         self.setup_main_view()
             
     def on_closing(self):

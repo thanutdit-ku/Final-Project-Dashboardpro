@@ -7,20 +7,25 @@ from ..config import WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDA
 
 class VolumeStatsPanel(tk.Frame):
     def __init__(self, parent, symbol):
-        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=10)
+        # Add border
+        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=5, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
         
-        # Grid layout
+        # Use grid for internal layout
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
         
-        # 5 Mins stats
-        self._create_stat_box("5mins Volume & ratio", 0, 0)
+        # 5m Stats
+        self.f5 = tk.Frame(self, bg=CARD_COLOR)
+        self.f5.grid(row=0, column=0, padx=10, sticky="nsew")
+        self._create_header_box(self.f5, "5m Volume & Ratio")
         
-        # 1 Hour stats
-        self._create_stat_box("1HRS Volume & ratio", 0, 1)
+        # 1h Stats
+        self.f1 = tk.Frame(self, bg=CARD_COLOR)
+        self.f1.grid(row=0, column=1, padx=10, sticky="nsew")
+        self._create_header_box(self.f1, "1h Volume & Ratio")
         
         # Datan Vars
         self.vars = {
@@ -34,32 +39,32 @@ class VolumeStatsPanel(tk.Frame):
         
         # Labels mapping for updating
         self.labels = {}
-        self._setup_labels(0, "5m")
-        self._setup_labels(1, "1h")
+        self._setup_labels(self.f5, "5m")
+        self._setup_labels(self.f1, "1h")
 
-    def _create_stat_box(self, title, row, col):
-        frame = tk.Frame(self, bg=CARD_COLOR, highlightbackground="gray", highlightthickness=1)
-        frame.grid(row=row, column=col, sticky="nsew", padx=5, pady=5)
-        tk.Label(frame, text=title, bg=CARD_COLOR, fg=TEXT_COLOR, font=("Arial", 12)).pack(anchor="w", padx=5, pady=5)
-        return frame
+    def _create_header_box(self, parent, text):
+        box_color = "#252930"
+        f = tk.Frame(parent, bg=box_color, padx=5, pady=5)
+        f.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(f, text=text, font=("Arial", 9, "bold"), fg=TEXT_SECONDARY, bg=box_color).pack(anchor="w")
 
-    def _setup_labels(self, col, prefix):
-        # We need to access the frame created in _create_stat_box. 
-        # Since I didn't save it, let's just create the labels directly in the grid cell
-        # Actually proper way:
-        frame = self.grid_slaves(row=0, column=col)[0]
+    def _create_stat_panel(self, parent, title, var_name, color):
+        # Container
+        container = tk.Frame(parent, bg=CARD_COLOR)
+        container.pack(fill=tk.X, pady=2)
         
-        tk.Label(frame, text="BUYS:", bg=CARD_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=5)
-        l1 = tk.Label(frame, textvariable=self.vars[f"{prefix}_buy"], bg=CARD_COLOR, fg=COLOR_BUY, font=("Arial", 12, "bold"))
-        l1.pack(anchor="w", padx=5)
+        # Box
+        box_color = "#252930"
+        frame = tk.Frame(container, bg=box_color, padx=10, pady=5)
+        frame.pack(fill=tk.BOTH, expand=True)
         
-        tk.Label(frame, text="SELLS:", bg=CARD_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=5)
-        l2 = tk.Label(frame, textvariable=self.vars[f"{prefix}_sell"], bg=CARD_COLOR, fg=COLOR_SELL, font=("Arial", 12, "bold"))
-        l2.pack(anchor="w", padx=5)
-        
-        tk.Label(frame, text="RATIO:", bg=CARD_COLOR, fg=TEXT_SECONDARY).pack(anchor="w", padx=5)
-        l3 = tk.Label(frame, textvariable=self.vars[f"{prefix}_ratio"], bg=CARD_COLOR, fg=TEXT_COLOR, font=("Arial", 12, "bold"))
-        l3.pack(anchor="w", padx=5)
+        tk.Label(frame, text=title, font=("Arial", 9), fg=TEXT_SECONDARY, bg=box_color, anchor="w").pack(fill=tk.X)
+        tk.Label(frame, textvariable=self.vars[var_name], font=("Arial", 12, "bold"), fg=color, bg=box_color, anchor="w").pack(fill=tk.X)
+
+    def _setup_labels(self, parent, prefix):
+        self._create_stat_panel(parent, "BUYS", f"{prefix}_buy", COLOR_BUY)
+        self._create_stat_panel(parent, "SELLS", f"{prefix}_sell", COLOR_SELL)
+        self._create_stat_panel(parent, "RATIO", f"{prefix}_ratio", TEXT_COLOR)
 
     def start(self):
         if self.is_active: return

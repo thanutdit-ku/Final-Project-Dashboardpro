@@ -11,15 +11,14 @@ from ..config import REST_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, COLOR_BUY,
 
 class ChartPanel(tk.Frame):
     def __init__(self, parent, symbol):
-        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=10)
-        self.symbol = symbol.upper()
+        # Add border
+        super().__init__(parent, bg=CARD_COLOR, padx=5, pady=5, highlightthickness=1, highlightbackground="gray30")
+        self.symbol = symbol.lower()
         
-        # Header
-        header = tk.Label(self, text=f"{self.symbol} 1H Candlestick", 
-                         bg=CARD_COLOR, fg=TEXT_COLOR, 
-                         font=FONT_SUBTITLE, anchor="w")
-        header.pack(fill=tk.X, pady=(0, 10))
-        
+        # Title
+        tk.Label(self, text=f"{symbol.upper()} 1H Candlestick", font=("Arial", 12, "bold"), 
+                 bg=CARD_COLOR, fg=TEXT_COLOR, anchor="w").pack(fill=tk.X, padx=5, pady=5)
+                 
         # Matplotlib Figure
         # Set panel color to card color
         self.fig = Figure(figsize=(5, 4), dpi=100, facecolor=CARD_COLOR)
@@ -55,19 +54,30 @@ class ChartPanel(tk.Frame):
     def update_loop(self):
         if not self.is_active: return
         threading.Thread(target=self._fetch_and_update, daemon=True).start()
-        self.after(5000, self.update_loop) # Update every 5 seconds
+        self.after(1000, self.update_loop) # Update every 1 second for real-time feel
         
     def _fetch_and_update(self):
         try:
             url = f"{REST_BASE_URL}/api/v3/klines"
+            
+            # Debug symbol
+            sym = self.symbol.strip().upper()
+            print(f"DEBUG Chart Symbol: '{sym}', len={len(sym)}")
+            
+            # Binance REST API usually prefers uppercase e.g. BTCUSDT
             params = {
-                "symbol": self.symbol,
+                "symbol": sym,
                 "interval": "1h",
                 "limit": 50
             }
             resp = requests.get(url, params=params)
             raw = resp.json()
             
+            # Check if valid list
+            if not isinstance(raw, list):
+                print(f"Chart API Error: {raw}")
+                return
+
             # Parse into DataFrame
             df = pd.DataFrame(raw, columns=['Open time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close time', 'Quote asset volume', 'Number of trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
             df['Open time'] = pd.to_datetime(df['Open time'], unit='ms')
@@ -86,22 +96,22 @@ class ChartPanel(tk.Frame):
             print(f"Chart Error: {e}")
 
     def _plot(self):
-        if not self.is_active or self.data.empty: return
-        
-        self.ax.clear()
-        
-        # Custom style for mplfinance to match dark theme
-        mc = mpf.make_marketcolors(up=COLOR_BUY, down=COLOR_SELL, edge='inherit', wick='inherit', volume='in')
-        s = mpf.make_mpf_style(marketcolors=mc, facecolor=CARD_COLOR, figcolor=CARD_COLOR, gridcolor=TEXT_COLOR, gridstyle=':')
-        
-        # We use mplfinance plot ability on external axes
-        mpf.plot(self.data, type='candle', ax=self.ax, style=s, datetime_format='%H:%M', volume=False)
-        # Volume is tricky to add as subplot on existing axes easily without messing specific layouts, 
-        # sticking to price only as per request image primarily shows price (though it has volume bars at bottom).
-        # To add volume, we'd need another axes. Let's keep it simple first.
-        
-        self.ax.set_ylabel("") # Remote label to save space
-        self.canvas.draw()
+        try:
+            if not self.is_active or self.data.empty: return
+            
+            self.ax.clear()
+            
+            # Custom style for mplfinance to match dark theme
+            mc = mpf.make_marketcolors(up=COLOR_BUY, down=COLOR_SELL, edge='inherit', wick='inherit', volume='in')
+            s = mpf.make_mpf_style(marketcolors=mc, facecolor=CARD_COLOR, figcolor=CARD_COLOR, gridcolor=TEXT_COLOR, gridstyle=':')
+            
+            # Use returnfig=False (default when ax matches) but be safer
+            mpf.plot(self.data, type='candle', ax=self.ax, style=s, datetime_format='%H:%M', volume=False, warn_too_much_data=1000)
+            
+            self.ax.set_ylabel("")
+            self.canvas.draw()
+        except Exception as e:
+            print(f"Plot Error: {e}")
         
     def stop(self):
         self.is_active = False

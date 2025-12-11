@@ -7,16 +7,20 @@ from ..config import WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDA
 
 class OrderBookPanel(tk.Frame):
     def __init__(self, parent, symbol):
-        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=10)
+        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=10, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
         
         # Header
-        header = tk.Label(self, text="Order Book Snapshot", 
-                         bg=CARD_COLOR, fg=TEXT_COLOR, 
+        box_color = "#252930"
+        header_frame = tk.Frame(self, bg=box_color, padx=10, pady=5)
+        header_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        header = tk.Label(header_frame, text="Order Book Snapshot", 
+                         bg=box_color, fg=TEXT_COLOR, 
                          font=FONT_SUBTITLE, anchor="w")
-        header.pack(fill=tk.X, pady=(0, 10))
+        header.pack(fill=tk.X)
         
         # Columns Frame
         cols_frame = tk.Frame(self, bg=CARD_COLOR)
@@ -49,16 +53,24 @@ class OrderBookPanel(tk.Frame):
     def _create_header_row(self, parent):
         f = tk.Frame(parent, bg=CARD_COLOR)
         f.pack(fill=tk.X)
-        tk.Label(f, text="Price", width=12, anchor="w", bg=CARD_COLOR, fg=TEXT_SECONDARY).pack(side=tk.LEFT)
-        tk.Label(f, text="Amount", width=12, anchor="e", bg=CARD_COLOR, fg=TEXT_SECONDARY).pack(side=tk.RIGHT)
+        f.grid_columnconfigure(0, weight=1)
+        f.grid_columnconfigure(1, weight=1)
+        
+        tk.Label(f, text="Price", anchor="w", bg=CARD_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, sticky="ew")
+        tk.Label(f, text="Amount", anchor="e", bg=CARD_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=1, sticky="ew")
         
     def _create_row(self, parent):
         f = tk.Frame(parent, bg=CARD_COLOR)
         f.pack(fill=tk.X, pady=1)
-        price_lbl = tk.Label(f, text="-", width=12, anchor="w", bg=CARD_COLOR, fg=TEXT_COLOR, font=FONT_NUMBERS)
-        price_lbl.pack(side=tk.LEFT)
-        amt_lbl = tk.Label(f, text="-", width=12, anchor="e", bg=CARD_COLOR, fg=TEXT_COLOR, font=FONT_NUMBERS)
-        amt_lbl.pack(side=tk.RIGHT)
+        f.grid_columnconfigure(0, weight=1)
+        f.grid_columnconfigure(1, weight=1)
+        
+        price_lbl = tk.Label(f, text="-", anchor="w", bg=CARD_COLOR, fg=TEXT_COLOR, font=FONT_NUMBERS)
+        price_lbl.grid(row=0, column=0, sticky="ew")
+        
+        amt_lbl = tk.Label(f, text="-", anchor="e", bg=CARD_COLOR, fg=TEXT_COLOR, font=FONT_NUMBERS)
+        amt_lbl.grid(row=0, column=1, sticky="ew")
+        
         return (price_lbl, amt_lbl)
         
     def start(self):
