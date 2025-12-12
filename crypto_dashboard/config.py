@@ -35,3 +35,6 @@ FONT_TITLE = ("Arial", 20, "bold")
 FONT_SUBTITLE = ("Arial", 14, "bold")
 FONT_BODY = ("Arial", 11)
 FONT_NUMBERS = ("Courier New", 12, "bold")
+
+# Persistence
+PREFS_FILE = "preferences.json"

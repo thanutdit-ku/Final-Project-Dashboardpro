@@ -33,7 +33,8 @@ class TradesFeedPanel(tk.Frame):
         
         tk.Label(col_frame, text="Price", anchor="w", bg=CARD_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=0, sticky="ew")
         tk.Label(col_frame, text="Amount", anchor="e", bg=CARD_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=1, sticky="ew")
-        tk.Label(col_frame, text="Time", anchor="e", bg=CARD_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=2, sticky="ew", padx=5)
+        # Increase right padding to prevent overlap with main scrollbar
+        tk.Label(col_frame, text="Time", anchor="e", bg=CARD_COLOR, fg=TEXT_SECONDARY).grid(row=0, column=2, sticky="ew", padx=(5, 20))
         
         # Trades List (Canvas or just simplistic labels list for performance)
         # Using a fixed number of rows for simplicity and performance
@@ -63,7 +64,7 @@ class TradesFeedPanel(tk.Frame):
         amt.grid(row=0, column=1, sticky="ew")
         
         time_lbl = tk.Label(f, text="--", anchor="e", bg=CARD_COLOR, fg=TEXT_SECONDARY, font=("Arial", 9))
-        time_lbl.grid(row=0, column=2, sticky="ew", padx=5)
+        time_lbl.grid(row=0, column=2, sticky="ew", padx=(5, 20))
         
         return {"price": price, "amt": amt, "time": time_lbl}
 

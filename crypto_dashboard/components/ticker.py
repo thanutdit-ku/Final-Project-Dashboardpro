@@ -94,20 +94,33 @@ class CryptoTicker(tk.Frame):
                 low = float(payload['l'])
                 vol = float(payload['v'])
                 
-                self.after(0, lambda: self.price_label.config(text=f"${price:,.2f}"))
-                self.after(0, lambda: self.high_label.config(text=f"${high:,.2f}"))
-                self.after(0, lambda: self.low_label.config(text=f"${low:,.2f}"))
-                self.after(0, lambda: self.vol_label.config(text=f"{vol:,.2f}"))
+                self.after(0, self._update_24h, price, high, low, vol)
                 
             elif event_type == 'bookTicker' or ('b' in payload and 'a' in payload):
-                # Sometimes bookTicker object is just the dict
                 bid = float(payload['b'])
                 ask = float(payload['a'])
-                self.after(0, lambda: self.bid_label.config(text=f"${bid:,.2f}"))
-                self.after(0, lambda: self.ask_label.config(text=f"${ask:,.2f}"))
+                self.after(0, self._update_book, bid, ask)
                 
         except Exception as e:
             print(f"Ticker Error: {e}")
+
+    def _update_24h(self, price, high, low, vol):
+        if not self.is_active: return
+        try:
+            self.price_label.config(text=f"${price:,.2f}")
+            self.high_label.config(text=f"${high:,.2f}")
+            self.low_label.config(text=f"${low:,.2f}")
+            self.vol_label.config(text=f"{vol:,.2f}")
+        except:
+            pass
+
+    def _update_book(self, bid, ask):
+        if not self.is_active: return
+        try:
+            self.bid_label.config(text=f"${bid:,.2f}")
+            self.ask_label.config(text=f"${ask:,.2f}")
+        except:
+            pass
 
     def on_error(self, ws, error):
         pass 

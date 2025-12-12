@@ -108,8 +108,8 @@ class ChartPanel(tk.Frame):
             ws_url,
             on_message=self.on_message,
             on_error=lambda ws, err: print(f"Chart WS Error: {err}"),
-            on_close=lambda ws, s, m: print("Chart WS Closed"),
-            on_open=lambda ws: print("Chart WS Open")
+            on_close=lambda ws, s, m: print(f"Chart WS Closed {self.symbol}"),
+            on_open=lambda ws: print(f"Chart WS Open {self.symbol}")
         )
         self.ws.run_forever()
 
