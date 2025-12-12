@@ -7,7 +7,7 @@ from ..config import WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDA
 
 class OrderBookPanel(tk.Frame):
     def __init__(self, parent, symbol):
-        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=10, highlightthickness=1, highlightbackground="gray30")
+        super().__init__(parent, bg=CARD_COLOR, padx=1, pady=1, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
@@ -15,7 +15,7 @@ class OrderBookPanel(tk.Frame):
         # Header
         box_color = "#252930"
         header_frame = tk.Frame(self, bg=box_color, padx=10, pady=5)
-        header_frame.pack(fill=tk.X, pady=(0, 10))
+        header_frame.pack(fill=tk.X, pady=(0, 5))
         
         header = tk.Label(header_frame, text="Order Book Snapshot", 
                          bg=box_color, fg=TEXT_COLOR, 

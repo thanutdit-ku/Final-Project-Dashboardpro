@@ -7,21 +7,32 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import threading
 import time
-from ..config import REST_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, COLOR_BUY, COLOR_SELL, FONT_SUBTITLE
+import websocket
+import json
+from ..config import REST_BASE_URL, WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, COLOR_BUY, COLOR_SELL, FONT_SUBTITLE
 
 class ChartPanel(tk.Frame):
     def __init__(self, parent, symbol):
         # Add border
-        super().__init__(parent, bg=CARD_COLOR, padx=5, pady=5, highlightthickness=1, highlightbackground="gray30")
+        super().__init__(parent, bg=CARD_COLOR, padx=1, pady=1, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
+        self.ws = None
         
-        # Title
-        tk.Label(self, text=f"{symbol.upper()} 1H Candlestick", font=("Arial", 12, "bold"), 
-                 bg=CARD_COLOR, fg=TEXT_COLOR, anchor="w").pack(fill=tk.X, padx=5, pady=5)
+        # Header
+        box_color = "#252930"
+        header_frame = tk.Frame(self, bg=box_color, padx=10, pady=5)
+        header_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        tk.Label(header_frame, text=f"{symbol.upper()} 1H Candlestick", font=("Arial", 12, "bold"), 
+                 bg=box_color, fg=TEXT_COLOR, anchor="w").pack(fill=tk.X)
                  
         # Matplotlib Figure
         # Set panel color to card color
         self.fig = Figure(figsize=(5, 4), dpi=100, facecolor=CARD_COLOR)
+        
+        # Adjust margins to show axis labels while keeping it tight
+        self.fig.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.2)
+        
         self.ax = self.fig.add_subplot(111)
         self.ax.set_facecolor(CARD_COLOR)
         
@@ -42,27 +53,18 @@ class ChartPanel(tk.Frame):
     def start(self):
         if self.is_active: return
         self.is_active = True
+        self.last_draw_time = 0
+        self.draw_interval = 0.2 # Max 5 FPS
         
         # Initial fetch
-        threading.Thread(target=self._fetch_and_update, daemon=True).start()
+        threading.Thread(target=self._fetch_initial_history, daemon=True).start()
         
-        # Periodic update (polling for simplicity instead of websocket for full chart rebuild)
-        # Using websocket for chart requires managing partial candle updates which is complex with mplfinance
-        # Polling every 2s is sufficient for a 1H chart demo
-        self.update_loop()
-        
-    def update_loop(self):
-        if not self.is_active: return
-        threading.Thread(target=self._fetch_and_update, daemon=True).start()
-        self.after(1000, self.update_loop) # Update every 1 second for real-time feel
-        
-    def _fetch_and_update(self):
+    def _fetch_initial_history(self):
         try:
             url = f"{REST_BASE_URL}/api/v3/klines"
             
             # Debug symbol
             sym = self.symbol.strip().upper()
-            print(f"DEBUG Chart Symbol: '{sym}', len={len(sym)}")
             
             # Binance REST API usually prefers uppercase e.g. BTCUSDT
             params = {
@@ -92,27 +94,97 @@ class ChartPanel(tk.Frame):
             # Schedule plot on main thread
             self.after(0, self._plot)
             
+            # Start WebSocket for live updates AFTER initial fetch
+            threading.Thread(target=self._run_socket, daemon=True).start()
+            
         except Exception as e:
             print(f"Chart Error: {e}")
+
+    # ADDED: WebSocket kline handler
+    def _run_socket(self):
+        ws_url = f"{WS_BASE_URL}/{self.symbol}@kline_1h"
+        
+        self.ws = websocket.WebSocketApp(
+            ws_url,
+            on_message=self.on_message,
+            on_error=lambda ws, err: print(f"Chart WS Error: {err}"),
+            on_close=lambda ws, s, m: print("Chart WS Closed"),
+            on_open=lambda ws: print("Chart WS Open")
+        )
+        self.ws.run_forever()
+
+    # MODIFIED: chart update logic with throttling
+    def on_message(self, ws, message):
+        if not self.is_active: return
+        try:
+            data = json.loads(message)
+            if data.get('e') == 'kline':
+                k = data['k']
+                
+                # Parse candle data
+                t = pd.to_datetime(k['t'], unit='ms')
+                o = float(k['o'])
+                h = float(k['h'])
+                l = float(k['l'])
+                c = float(k['c'])
+                v = float(k['v'])
+                
+                # Update DataFrame (CURRENT candle update)
+                if t in self.data.index:
+                    # Update existing row using .at for scalar access (safer/faster)
+                    self.data.at[t, 'Open'] = o
+                    self.data.at[t, 'High'] = h
+                    self.data.at[t, 'Low'] = l
+                    self.data.at[t, 'Close'] = c
+                    self.data.at[t, 'Volume'] = v
+                else:
+                    # New candle - Append
+                    new_row_data = {
+                        'Open': o, 'High': h, 'Low': l, 'Close': c, 'Volume': v
+                    }
+                    # Construct DataFrame aligned with existing columns
+                    # We create a single-row DataFrame
+                    new_df = pd.DataFrame(new_row_data, index=[t])
+                    # Reindex to match self.data columns, filling missing with 0
+                    new_df = new_df.reindex(columns=self.data.columns, fill_value=0)
+                    
+                    self.data = pd.concat([self.data, new_df])
+                
+                # Prune old data
+                if len(self.data) > 60:
+                     self.data = self.data.iloc[-50:]
+                
+                # Throttling to prevent GUI freeze
+                current_time = time.time()
+                if current_time - self.last_draw_time > self.draw_interval:
+                    self.last_draw_time = current_time
+                    self.after(0, self._plot)
+                
+        except Exception as e:
+            print(f"Chart Message Error: {e}")
 
     def _plot(self):
         try:
             if not self.is_active or self.data.empty: return
             
+            # Efficiently clear and replot
             self.ax.clear()
             
             # Custom style for mplfinance to match dark theme
             mc = mpf.make_marketcolors(up=COLOR_BUY, down=COLOR_SELL, edge='inherit', wick='inherit', volume='in')
             s = mpf.make_mpf_style(marketcolors=mc, facecolor=CARD_COLOR, figcolor=CARD_COLOR, gridcolor=TEXT_COLOR, gridstyle=':')
             
-            # Use returnfig=False (default when ax matches) but be safer
-            mpf.plot(self.data, type='candle', ax=self.ax, style=s, datetime_format='%H:%M', volume=False, warn_too_much_data=1000)
+            # Plot only OHLCV data to avoid column mismatch errors
+            plot_data = self.data[['Open', 'High', 'Low', 'Close', 'Volume']]
+            
+            mpf.plot(plot_data, type='candle', ax=self.ax, style=s, datetime_format='%H:%M', volume=False, warn_too_much_data=1000)
             
             self.ax.set_ylabel("")
             self.canvas.draw()
+            
         except Exception as e:
             print(f"Plot Error: {e}")
         
     def stop(self):
         self.is_active = False
-
+        if self.ws: self.ws.close()

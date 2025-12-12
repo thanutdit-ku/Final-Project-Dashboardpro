@@ -12,6 +12,7 @@ class CryptoTicker(tk.Frame):
     
     def __init__(self, parent, symbol, display_name):
         # Added border styling: highlightthickness=1, highlightbackground="#2b3139" (lighter than bg)
+        # Reverting to simpler border from Step 69 view
         super().__init__(parent, bg=CARD_COLOR, padx=20, pady=10, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
         self.is_active = False

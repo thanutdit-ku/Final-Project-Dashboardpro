@@ -9,7 +9,7 @@ from ..config import WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDA
 class TradesFeedPanel(tk.Frame):
     def __init__(self, parent, symbol):
         # Add border
-        super().__init__(parent, bg=CARD_COLOR, padx=10, pady=10, highlightthickness=1, highlightbackground="gray30")
+        super().__init__(parent, bg=CARD_COLOR, padx=1, pady=1, highlightthickness=1, highlightbackground="gray30")
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
