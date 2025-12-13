@@ -609,7 +609,12 @@ class CryptoDashboard:
             )
 
         def toggle_panel(event=None):
-            var.set(not var.get())
+            current_value = var.get()
+            if current_value:
+                active_count = sum(1 for v in self.panel_vars.values() if v.get())
+                if active_count <= 1:
+                    return
+            var.set(not current_value)
             refresh()
             self.setup_main_view()
 
@@ -695,26 +700,46 @@ class CryptoDashboard:
         # Always Start Ticker
         comps['ticker'].start()
         
-        # Helper to Start/Grid or Stop/Ungrid
-        def manage_comp(key, is_visible, row, col, sticky="nsew"):
+        def manage_comp(key, position, sticky="nsew"):
             c = comps[key]
-            if is_visible:
+            if position is not None:
+                row, col = position
                 c.grid(row=row, column=col, sticky=sticky, padx=8, pady=8)
-                if hasattr(c, 'start'): c.start()
-                # Special handling for trades container children
+                if hasattr(c, 'start'):
+                    c.start()
                 if key == 'trades_container':
                     comps['vol'].start()
                     comps['trades'].start()
             else:
                 c.grid_remove()
-                if hasattr(c, 'stop'): c.stop()
+                if hasattr(c, 'stop'):
+                    c.stop()
                 if key == 'trades_container':
                     comps['vol'].stop()
                     comps['trades'].stop()
 
-        manage_comp('book', self.panel_vars['book'].get(), 1, 0)
-        manage_comp('chart', self.panel_vars['chart'].get(), 1, 1)
-        manage_comp('trades_container', self.panel_vars['trades'].get(), 1, 2)
+        panel_order = [
+            ('book', self.panel_vars['book'].get()),
+            ('chart', self.panel_vars['chart'].get()),
+            ('trades_container', self.panel_vars['trades'].get()),
+        ]
+        positions = {}
+        current_col = 0
+        for key, visible in panel_order:
+            if visible:
+                positions[key] = (1, current_col)
+                current_col += 1
+            else:
+                positions[key] = None
+
+        row_frame = self.asset_frames.get(symbol)
+        if row_frame:
+            for idx in range(3):
+                weight = 1 if idx < current_col else 0
+                row_frame.columnconfigure(idx, weight=weight)
+
+        for key, _ in panel_order:
+            manage_comp(key, positions[key])
 
     def _show_overview_view(self):
         if not self.overview_panel:
