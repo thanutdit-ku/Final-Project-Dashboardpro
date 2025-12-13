@@ -9,22 +9,58 @@ import threading
 import time
 import websocket
 import json
-from ..config import REST_BASE_URL, WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, COLOR_BUY, COLOR_SELL, FONT_SUBTITLE
+from ..config import (
+    REST_BASE_URL,
+    WS_BASE_URL,
+    WS_SSL_OPTIONS,
+    CARD_COLOR,
+    CARD_HEADER_BG,
+    BORDER_COLOR,
+    ACCENT_COLOR,
+    TEXT_COLOR,
+    COLOR_BUY,
+    COLOR_SELL,
+    FONT_SUBTITLE,
+    CHART_INTERVAL,
+)
 
 class ChartPanel(tk.Frame):
     def __init__(self, parent, symbol):
         # Add border
-        super().__init__(parent, bg=CARD_COLOR, padx=1, pady=1, highlightthickness=1, highlightbackground="gray30")
+        super().__init__(
+            parent,
+            bg=CARD_COLOR,
+            padx=1,
+            pady=1,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
         self.symbol = symbol.lower()
         self.ws = None
         
         # Header
-        box_color = "#252930"
-        header_frame = tk.Frame(self, bg=box_color, padx=10, pady=5)
-        header_frame.pack(fill=tk.X, pady=(0, 5))
+        box_color = CARD_HEADER_BG
+        header_frame = tk.Frame(
+            self,
+            bg=box_color,
+            padx=16,
+            pady=10,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
+        header_frame.pack(fill=tk.X, pady=(0, 8))
         
-        tk.Label(header_frame, text=f"{symbol.upper()} 1H Candlestick", font=("Arial", 12, "bold"), 
-                 bg=box_color, fg=TEXT_COLOR, anchor="w").pack(fill=tk.X)
+        self.interval = CHART_INTERVAL.lower()
+        interval_label = self.interval.upper()
+        tk.Label(
+            header_frame,
+            text=f"{symbol.upper()} {interval_label} Candlestick",
+            font=("Arial", 12, "bold"),
+            bg=box_color,
+            fg=TEXT_COLOR,
+            anchor="w",
+        ).pack(fill=tk.X)
+        tk.Frame(header_frame, height=2, bg=ACCENT_COLOR).pack(fill=tk.X, pady=(8, 0))
                  
         # Matplotlib Figure
         # Set panel color to card color
@@ -37,12 +73,10 @@ class ChartPanel(tk.Frame):
         self.ax.set_facecolor(CARD_COLOR)
         
         # Styling axes
-        self.ax.tick_params(axis='x', colors=TEXT_COLOR)
-        self.ax.tick_params(axis='y', colors=TEXT_COLOR)
-        self.ax.spines['bottom'].set_color(TEXT_COLOR)
-        self.ax.spines['top'].set_color(TEXT_COLOR)
-        self.ax.spines['left'].set_color(TEXT_COLOR)
-        self.ax.spines['right'].set_color(TEXT_COLOR)
+        self.ax.tick_params(axis="x", colors=TEXT_COLOR)
+        self.ax.tick_params(axis="y", colors=TEXT_COLOR)
+        for side in ("bottom", "top", "left", "right"):
+            self.ax.spines[side].set_color(BORDER_COLOR)
         
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -69,7 +103,7 @@ class ChartPanel(tk.Frame):
             # Binance REST API usually prefers uppercase e.g. BTCUSDT
             params = {
                 "symbol": sym,
-                "interval": "1h",
+                "interval": self.interval,
                 "limit": 50
             }
             resp = requests.get(url, params=params)
@@ -102,7 +136,7 @@ class ChartPanel(tk.Frame):
 
     # ADDED: WebSocket kline handler
     def _run_socket(self):
-        ws_url = f"{WS_BASE_URL}/{self.symbol}@kline_1h"
+        ws_url = f"{WS_BASE_URL}/{self.symbol}@kline_{self.interval}"
         
         self.ws = websocket.WebSocketApp(
             ws_url,
@@ -111,7 +145,7 @@ class ChartPanel(tk.Frame):
             on_close=lambda ws, s, m: print(f"Chart WS Closed {self.symbol}"),
             on_open=lambda ws: print(f"Chart WS Open {self.symbol}")
         )
-        self.ws.run_forever()
+        self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
 
     # MODIFIED: chart update logic with throttling
     def on_message(self, ws, message):
@@ -171,8 +205,16 @@ class ChartPanel(tk.Frame):
             self.ax.clear()
             
             # Custom style for mplfinance to match dark theme
-            mc = mpf.make_marketcolors(up=COLOR_BUY, down=COLOR_SELL, edge='inherit', wick='inherit', volume='in')
-            s = mpf.make_mpf_style(marketcolors=mc, facecolor=CARD_COLOR, figcolor=CARD_COLOR, gridcolor=TEXT_COLOR, gridstyle=':')
+            mc = mpf.make_marketcolors(
+                up=COLOR_BUY, down=COLOR_SELL, edge="inherit", wick="inherit", volume="in"
+            )
+            s = mpf.make_mpf_style(
+                marketcolors=mc,
+                facecolor=CARD_COLOR,
+                figcolor=CARD_COLOR,
+                gridcolor=BORDER_COLOR,
+                gridstyle=":",
+            )
             
             # Plot only OHLCV data to avoid column mismatch errors
             plot_data = self.data[['Open', 'High', 'Low', 'Close', 'Volume']]

@@ -3,28 +3,49 @@ from tkinter import ttk
 import websocket
 import json
 import threading
-from ..config import WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDARY, COLOR_BUY, COLOR_SELL, FONT_SUBTITLE
+from ..config import (
+    WS_BASE_URL,
+    WS_SSL_OPTIONS,
+    CARD_COLOR,
+    CARD_HEADER_BG,
+    BORDER_COLOR,
+    ACCENT_COLOR,
+    TEXT_COLOR,
+    TEXT_SECONDARY,
+    COLOR_BUY,
+    COLOR_SELL,
+)
 
 class VolumeStatsPanel(tk.Frame):
     def __init__(self, parent, symbol):
         # Add border
-        super().__init__(parent, bg=CARD_COLOR, padx=1, pady=1, highlightthickness=1, highlightbackground="gray30")
+        super().__init__(
+            parent,
+            bg=CARD_COLOR,
+            padx=1,
+            pady=1,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
         
-        # Use grid for internal layout
+        # Use grid for internal layout; spare middle column acts as spacer
         self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
+        self.columnconfigure(1, weight=0, minsize=8)
+        self.columnconfigure(2, weight=1)
         
         # 5m Stats
         self.f5 = tk.Frame(self, bg=CARD_COLOR)
-        self.f5.grid(row=0, column=0, padx=10, sticky="nsew")
+        self.f5.grid(row=0, column=0, padx=(12, 6), pady=6, sticky="nsew")
+        self.f5.grid_columnconfigure(0, weight=1)
         self._create_header_box(self.f5, "5m Volume & Ratio")
         
         # 1h Stats
         self.f1 = tk.Frame(self, bg=CARD_COLOR)
-        self.f1.grid(row=0, column=1, padx=10, sticky="nsew")
+        self.f1.grid(row=0, column=2, padx=(6, 12), pady=6, sticky="nsew")
+        self.f1.grid_columnconfigure(0, weight=1)
         self._create_header_box(self.f1, "1h Volume & Ratio")
         
         # Datan Vars
@@ -43,28 +64,65 @@ class VolumeStatsPanel(tk.Frame):
         self._setup_labels(self.f1, "1h")
 
     def _create_header_box(self, parent, text):
-        box_color = "#252930"
-        f = tk.Frame(parent, bg=box_color, padx=5, pady=5)
-        f.pack(fill=tk.X, pady=(0, 10))
-        tk.Label(f, text=text, font=("Arial", 9, "bold"), fg=TEXT_SECONDARY, bg=box_color).pack(anchor="w")
+        box_color = CARD_HEADER_BG
+        f = tk.Frame(
+            parent,
+            bg=box_color,
+            padx=14,
+            pady=12,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
+        f.grid(row=0, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        tk.Label(
+            f,
+            text=text,
+            font=("Arial", 9, "bold"),
+            fg=TEXT_SECONDARY,
+            bg=box_color,
+        ).pack(anchor="w", pady=(0, 8))
+        tk.Frame(f, height=2, bg=ACCENT_COLOR).pack(fill=tk.X, pady=(4, 0))
 
-    def _create_stat_panel(self, parent, title, var_name, color):
-        # Container
-        container = tk.Frame(parent, bg=CARD_COLOR)
-        container.pack(fill=tk.X, pady=2)
+    def _create_stat_panel(self, parent, row, title, var_name, color, is_last=False):
+        box_color = CARD_HEADER_BG
+        frame = tk.Frame(
+            parent,
+            bg=box_color,
+            padx=16,
+            pady=12,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
+        pady = (0, 0 if is_last else 8)
+        frame.grid(row=row, column=0, sticky="nsew", padx=8, pady=pady)
         
-        # Box
-        box_color = "#252930"
-        frame = tk.Frame(container, bg=box_color, padx=10, pady=5)
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        tk.Label(frame, text=title, font=("Arial", 9), fg=TEXT_SECONDARY, bg=box_color, anchor="w").pack(fill=tk.X)
-        tk.Label(frame, textvariable=self.vars[var_name], font=("Arial", 12, "bold"), fg=color, bg=box_color, anchor="w").pack(fill=tk.X)
+        tk.Label(
+            frame,
+            text=title,
+            font=("Arial", 10, "bold"),
+            fg=TEXT_SECONDARY,
+            bg=box_color,
+            anchor="w",
+        ).pack(fill=tk.X, pady=(0, 4))
+        tk.Label(
+            frame,
+            textvariable=self.vars[var_name],
+            font=("Arial", 14, "bold"),
+            fg=color,
+            bg=box_color,
+            anchor="w",
+        ).pack(fill=tk.X)
 
     def _setup_labels(self, parent, prefix):
-        self._create_stat_panel(parent, "BUYS", f"{prefix}_buy", COLOR_BUY)
-        self._create_stat_panel(parent, "SELLS", f"{prefix}_sell", COLOR_SELL)
-        self._create_stat_panel(parent, "RATIO", f"{prefix}_ratio", TEXT_COLOR)
+        entries = [
+            ("BUYS", f"{prefix}_buy", COLOR_BUY),
+            ("SELLS", f"{prefix}_sell", COLOR_SELL),
+            ("RATIO", f"{prefix}_ratio", TEXT_COLOR),
+        ]
+        for idx, (title, var_name, color) in enumerate(entries, start=1):
+            is_last = idx == len(entries)
+            parent.grid_rowconfigure(idx, weight=1)
+            self._create_stat_panel(parent, idx, title, var_name, color, is_last)
 
     def start(self):
         if self.is_active: return
@@ -88,7 +146,7 @@ class VolumeStatsPanel(tk.Frame):
             on_error=lambda ws, err: print(f"Vol Error: {err}"),
             on_close=lambda ws, s, m: print("Vol Closed")
         )
-        self.ws.run_forever()
+        self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
 
     def stop(self):
         self.is_active = False

@@ -3,7 +3,20 @@ from tkinter import ttk
 import websocket
 import json
 import threading
-from ..config import WS_BASE_URL, FONT_TITLE, FONT_SUBTITLE, FONT_NUMBERS, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDARY, COLOR_BUY, COLOR_SELL, COLOR_NEUTRAL
+from ..config import (
+    WS_BASE_URL,
+    WS_SSL_OPTIONS,
+    FONT_TITLE,
+    FONT_SUBTITLE,
+    CARD_COLOR,
+    CARD_HEADER_BG,
+    BORDER_COLOR,
+    ACCENT_COLOR,
+    TEXT_COLOR,
+    TEXT_SECONDARY,
+    COLOR_BUY,
+    COLOR_SELL,
+)
 
 class CryptoTicker(tk.Frame):
     """
@@ -11,9 +24,15 @@ class CryptoTicker(tk.Frame):
     """
     
     def __init__(self, parent, symbol, display_name):
-        # Added border styling: highlightthickness=1, highlightbackground="#2b3139" (lighter than bg)
-        # Reverting to simpler border from Step 69 view
-        super().__init__(parent, bg=CARD_COLOR, padx=20, pady=10, highlightthickness=1, highlightbackground="gray30")
+        # Add border + generous padding for hero stats row
+        super().__init__(
+            parent,
+            bg=CARD_COLOR,
+            padx=22,
+            pady=14,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
@@ -47,11 +66,26 @@ class CryptoTicker(tk.Frame):
         
         # Create the visible "box" frame
         # Use a slightly lighter background for the box to make it stand out like the image
-        box_color = "#252930" 
-        frame = tk.Frame(container, bg=box_color, padx=10, pady=5)
+        box_color = CARD_HEADER_BG
+        frame = tk.Frame(
+            container,
+            bg=box_color,
+            padx=12,
+            pady=8,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
         frame.pack(fill=tk.BOTH, expand=True)
         
-        tk.Label(frame, text=title, font=("Arial", 9), fg=TEXT_SECONDARY, bg=box_color, anchor="w").pack(fill=tk.X)
+        tk.Frame(frame, height=2, bg=ACCENT_COLOR).pack(fill=tk.X, pady=(0, 6))
+        tk.Label(
+            frame,
+            text=title,
+            font=("Arial", 9, "bold"),
+            fg=TEXT_SECONDARY,
+            bg=box_color,
+            anchor="w",
+        ).pack(fill=tk.X)
         lbl = tk.Label(frame, text="--", font=font_val, fg=color, bg=box_color, anchor="w")
         lbl.pack(fill=tk.X)
         setattr(self, var_name, lbl)
@@ -73,7 +107,11 @@ class CryptoTicker(tk.Frame):
             on_close=self.on_close,
             on_open=self.on_open
         )
-        threading.Thread(target=self.ws.run_forever, daemon=True).start()
+        threading.Thread(target=self._run_forever, daemon=True).start()
+
+    def _run_forever(self):
+        if self.ws:
+            self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
     
     def stop(self):
         self.is_active = False

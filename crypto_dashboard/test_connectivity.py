@@ -3,7 +3,7 @@ import websocket
 import json
 import threading
 import time
-from config import REST_BASE_URL, WS_BASE_URL
+from config import REST_BASE_URL, WS_BASE_URL, WS_SSL_OPTIONS
 
 def test_rest_api():
     print(f"Testing REST API ({REST_BASE_URL})...")
@@ -38,7 +38,7 @@ def test_websocket():
     ws = websocket.WebSocketApp(ws_url, on_message=on_message, on_error=on_error)
     
     # Run in thread
-    t = threading.Thread(target=ws.run_forever)
+    t = threading.Thread(target=lambda: ws.run_forever(sslopt=WS_SSL_OPTIONS))
     t.start()
     
     # Wait max 5 seconds

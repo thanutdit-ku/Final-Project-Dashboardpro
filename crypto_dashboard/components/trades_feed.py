@@ -4,29 +4,62 @@ import websocket
 import json
 import threading
 from datetime import datetime
-from ..config import WS_BASE_URL, BG_COLOR, CARD_COLOR, TEXT_COLOR, TEXT_SECONDARY, COLOR_BUY, COLOR_SELL, FONT_SUBTITLE, FONT_BODY
+from ..config import (
+    WS_BASE_URL,
+    WS_SSL_OPTIONS,
+    CARD_COLOR,
+    CARD_HEADER_BG,
+    BORDER_COLOR,
+    ACCENT_COLOR,
+    TEXT_COLOR,
+    TEXT_SECONDARY,
+    COLOR_BUY,
+    COLOR_SELL,
+    FONT_SUBTITLE,
+    FONT_BODY,
+)
 
 class TradesFeedPanel(tk.Frame):
     def __init__(self, parent, symbol):
         # Add border
-        super().__init__(parent, bg=CARD_COLOR, padx=1, pady=1, highlightthickness=1, highlightbackground="gray30")
+        super().__init__(
+            parent,
+            bg=CARD_COLOR,
+            padx=1,
+            pady=1,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
         self.symbol = symbol.lower()
         self.is_active = False
         self.ws = None
         
         # Header
-        box_color = "#252930"
-        header_frame = tk.Frame(self, bg=box_color, padx=10, pady=5)
-        header_frame.pack(fill=tk.X, pady=(0, 5))
+        box_color = CARD_HEADER_BG
+        header_frame = tk.Frame(
+            self,
+            bg=box_color,
+            padx=16,
+            pady=10,
+            highlightthickness=1,
+            highlightbackground=BORDER_COLOR,
+        )
+        header_frame.pack(fill=tk.X, pady=(0, 8))
         
-        header = tk.Label(header_frame, text="Recent Trades", 
-                         bg=box_color, fg=TEXT_COLOR, 
-                         font=("Arial", 12, "bold"), anchor="w") # Bold title
+        header = tk.Label(
+            header_frame,
+            text="Recent Trades",
+            bg=box_color,
+            fg=TEXT_COLOR,
+            font=("Arial", 12, "bold"),
+            anchor="w",
+        )  # Bold title
         header.pack(fill=tk.X)
+        tk.Frame(header_frame, height=2, bg=ACCENT_COLOR).pack(fill=tk.X, pady=(8, 0))
         
         # Header Columns
         col_frame = tk.Frame(self, bg=CARD_COLOR)
-        col_frame.pack(fill=tk.X)
+        col_frame.pack(fill=tk.X, padx=12, pady=(0, 6))
         col_frame.grid_columnconfigure(0, weight=1)
         col_frame.grid_columnconfigure(1, weight=1)
         col_frame.grid_columnconfigure(2, weight=1)
@@ -42,7 +75,7 @@ class TradesFeedPanel(tk.Frame):
         self.max_rows = 15
         
         self.list_frame = tk.Frame(self, bg=CARD_COLOR)
-        self.list_frame.pack(fill=tk.BOTH, expand=True)
+        self.list_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 12))
         
         for _ in range(self.max_rows):
             row = self._create_row()
@@ -79,7 +112,11 @@ class TradesFeedPanel(tk.Frame):
             on_error=lambda ws, err: None,
             on_close=lambda ws, s, m: None
         )
-        threading.Thread(target=self.ws.run_forever, daemon=True).start()
+        threading.Thread(target=self._run_forever, daemon=True).start()
+
+    def _run_forever(self):
+        if self.ws:
+            self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
 
     def stop(self):
         self.is_active = False

@@ -7,3 +7,5 @@ __pycache__/
 env/
 venv/
 preferences.json
+.matplotlib_cache/
+*/.matplotlib_cache/
