@@ -59,6 +59,8 @@ class OverviewPanel(tk.Frame):
         self.has_ws_data = False
         self.has_history_data = False
         self.loading_overlay = None
+        self.rest_poll_job = None
+        self.rest_poll_interval_ms = 5000
 
         self.chart_colors = PASTEL_CHART_COLORS
 
@@ -324,11 +326,16 @@ class OverviewPanel(tk.Frame):
         ).start()
 
         threading.Thread(target=self._fetch_history, daemon=True).start()
+        self._schedule_rest_poll(initial=True)
 
     def stop(self):
         self.is_active = False
         if self.ws:
             self.ws.close()
+            self.ws = None
+        if self.rest_poll_job:
+            self.after_cancel(self.rest_poll_job)
+            self.rest_poll_job = None
 
     # =========================
     # UPDATE LOGIC
@@ -561,3 +568,49 @@ class OverviewPanel(tk.Frame):
         if not self.has_history_data:
             self.has_history_data = True
             self._maybe_hide_loading()
+
+    # =========================
+    # REST SNAPSHOT FALLBACK
+    # =========================
+    def _schedule_rest_poll(self, initial=False):
+        if not self.is_active:
+            return
+        delay = 0 if initial else self.rest_poll_interval_ms
+        if self.rest_poll_job:
+            self.after_cancel(self.rest_poll_job)
+        self.rest_poll_job = self.after(delay, self._rest_poll)
+
+    def _rest_poll(self):
+        self.rest_poll_job = None
+        if not self.is_active:
+            return
+        threading.Thread(target=self._fetch_rest_snapshot, daemon=True).start()
+
+    def _fetch_rest_snapshot(self):
+        url = f"{REST_BASE_URL}/api/v3/ticker/24hr"
+        snapshots = {}
+        for sym in self.symbols:
+            try:
+                resp = requests.get(
+                    url, params={"symbol": sym.upper()}, timeout=5
+                )
+                resp.raise_for_status()
+                payload = resp.json()
+                snapshots[sym] = {
+                    "price": float(payload["lastPrice"]),
+                    "change": float(payload["priceChangePercent"]),
+                    "volume": float(payload.get("quoteVolume", 0)),
+                }
+            except Exception:
+                continue
+
+        if snapshots:
+            self.after(0, self._apply_rest_snapshot, snapshots)
+        if self.is_active:
+            self._schedule_rest_poll()
+
+    def _apply_rest_snapshot(self, snapshots):
+        for sym, data in snapshots.items():
+            if sym not in self.card_vars:
+                continue
+            self._update_card(sym, data["price"], data["change"], data["volume"])

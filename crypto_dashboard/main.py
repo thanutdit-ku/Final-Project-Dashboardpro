@@ -42,6 +42,7 @@ from .components.chart import ChartPanel
 from .components.volume_stats import VolumeStatsPanel
 from .components.trades_feed import TradesFeedPanel
 from .components.overview import OverviewPanel
+from .components.home_screen import HomeScreen
 
 OVERVIEW_KEY = "overview"
 
@@ -153,7 +154,7 @@ class CryptoDashboard:
         self.root.configure(bg=BG_COLOR)
         
         self.dashboard_initialized = False
-        self.home_frame = None
+        self.home_screen = HomeScreen(self.root, self.enter_dashboard)
         self.sidebar = None
         self.main_container = None
         self.scrollable_frame = None
@@ -170,82 +171,17 @@ class CryptoDashboard:
             "chart": tk.BooleanVar(value=True),
             "trades": tk.BooleanVar(value=True),
         }
+        self.panel_trace_ids = {}
         
         self.load_preferences()
         
-        self.show_home_screen()
-
-    def show_home_screen(self):
-        if self.home_frame:
-            return
-        self.home_frame = tk.Frame(self.root, bg=BG_COLOR)
-        self.home_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-        
-        container = tk.Frame(self.home_frame, bg=BG_COLOR)
-        container.pack(expand=True)
-        
-        logo_path = Path(__file__).resolve().parent / "crypto-Photoroom.png"
-        if logo_path.exists():
-            try:
-                img = Image.open(logo_path)
-                img.thumbnail((240, 220), Image.LANCZOS)
-                self.home_logo = ImageTk.PhotoImage(img)
-                tk.Label(container, image=self.home_logo, bg=BG_COLOR).pack(pady=(0, 20))
-            except Exception:
-                tk.Label(
-                    container,
-                    text="CRYPTO\nDASHBOARD",
-                    font=("Arial", 26, "bold"),
-                    fg=ACCENT_COLOR,
-                    bg=BG_COLOR,
-                ).pack(pady=(0, 20))
-        else:
-            tk.Label(
-                container,
-                text="CRYPTO\nDASHBOARD",
-                font=("Arial", 26, "bold"),
-                fg=ACCENT_COLOR,
-                bg=BG_COLOR,
-            ).pack(pady=(0, 20))
-        
-        tk.Label(
-            container,
-            text="Track curated market intelligence\nacross crypto majors in one glance.",
-            font=("Arial", 13),
-            fg=TEXT_SECONDARY,
-            bg=BG_COLOR,
-        ).pack(pady=(0, 30))
-        
-        cta = tk.Button(
-            container,
-            text="Enter Live Dashboard",
-            font=("Arial", 12, "bold"),
-            bg=ACCENT_COLOR,
-            fg=SIDEBAR_BG,
-            activebackground="#ffd84d",
-            activeforeground=SIDEBAR_BG,
-            relief="flat",
-            padx=30,
-            pady=12,
-            command=self.enter_dashboard,
-        )
-        cta.pack()
-        
-        tk.Label(
-            container,
-            text="Powered by Binance real-time feeds • Python UI",
-            font=("Arial", 9),
-            fg=TEXT_SECONDARY,
-            bg=BG_COLOR,
-        ).pack(pady=(18, 0))
-        self.root.update_idletasks()
+        self.home_screen.show()
 
     def enter_dashboard(self):
         if not self.dashboard_initialized:
             self._setup_dashboard_ui()
-        if self.home_frame:
-            self.home_frame.destroy()
-            self.home_frame = None
+        if self.home_screen:
+            self.home_screen.destroy()
 
     def _setup_dashboard_ui(self):
         if self.dashboard_initialized:
@@ -585,6 +521,8 @@ class CryptoDashboard:
         subtitle.pack(fill=tk.X)
 
         def refresh():
+            if not card.winfo_exists():
+                return
             active = var.get()
             bg_color = "#1f2735" if active else SIDEBAR_CARD_BG
             border = ACCENT_COLOR if active else BORDER_COLOR
@@ -627,7 +565,14 @@ class CryptoDashboard:
             refresh()
 
         refresh()
-        var.trace_add("write", lambda *args: refresh())
+
+        if var_key in self.panel_trace_ids:
+            try:
+                var.trace_remove("write", self.panel_trace_ids[var_key])
+            except tk.TclError:
+                pass
+        trace_id = var.trace_add("write", lambda *args: refresh())
+        self.panel_trace_ids[var_key] = trace_id
 
         widgets = (card, indicator, text_frame, title, subtitle)
         for widget in widgets:

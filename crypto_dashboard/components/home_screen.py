@@ -1,201 +1,201 @@
-import tkinter as tk
 from pathlib import Path
+import tkinter as tk
+from PIL import Image, ImageTk, ImageDraw, ImageFilter
 
-from PIL import Image, ImageTk
+from ..config import BG_COLOR, ACCENT_COLOR, TEXT_SECONDARY, SIDEBAR_BG, WINDOW_SIZE
 
-from ..config import (
-    BG_COLOR,
-    ACCENT_COLOR,
-    COLOR_SELL,
-    TEXT_COLOR,
-    TEXT_SECONDARY,
-)
+BACKGROUND_VERTICAL_OFFSET = -0.05  # move hero image slightly upward
+CTA_SIZE = (360, 80)
+CTA_RADIUS = 26
+CTA_SHADOW_OFFSET = 10
 
 
 class HomeScreen:
-    """Standalone landing screen overlay shown before dashboard loads."""
+    """Splash screen with branded background and CTA."""
 
     def __init__(self, root, on_enter):
         self.root = root
         self.on_enter = on_enter
+        self.frame = None
+        self._bg_img = None
+        self.background_label = None
+        self._resize_binding = None
+        self._current_size = None
+        self._cta_images = None
+        self._cta_canvas = None
+
+    def show(self):
+        if self.frame:
+            return
+
         self.frame = tk.Frame(self.root, bg=BG_COLOR)
         self.frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-        self.logo_photo = None
-        self._build_layout()
 
-    def _build_layout(self):
-        top_bar = tk.Frame(self.frame, bg="#060b16", height=60)
-        top_bar.pack(fill="x", side="top")
-        top_bar.pack_propagate(False)
-        tk.Label(
-            top_bar,
-            text="CRYPTO DASHBOARD • ALPHA ACCESS",
-            font=("Arial", 11, "bold"),
-            fg="#f7f9fb",
-            bg="#060b16",
-            anchor="center",
-        ).pack(fill="both")
+        self._render_background()
+        if not self._resize_binding:
+            self._resize_binding = self.root.bind("<Configure>", self._on_root_resize)
 
-        self.frame.configure(bg="#03050b")
-        hero_surface = tk.Frame(self.frame, bg="#04060f")
-        hero_surface.pack(fill="both", expand=True)
-        hero_surface.columnconfigure(0, weight=3)
-        hero_surface.columnconfigure(1, weight=2)
-        hero_surface.rowconfigure(0, weight=1)
+        cta_container = tk.Frame(self.frame, bg=BG_COLOR, highlightthickness=0, bd=0)
+        cta_container.place(relx=0.5, rely=0.88, anchor="center")
 
-        left_bg = tk.Frame(hero_surface, bg="#0c1429", padx=50, pady=50)
-        left_bg.grid(row=0, column=0, sticky="nsew", padx=(50, 25), pady=(40, 20))
-        left_bg.columnconfigure(0, weight=1)
-
-        hero = left_bg
-        hero.columnconfigure(0, weight=1)
-
-        logo_path = Path(__file__).resolve().parent.parent / "crypto-Photoroom.png"
-        if logo_path.exists():
-            try:
-                img = Image.open(logo_path)
-                img.thumbnail((200, 180), Image.LANCZOS)
-                self.logo_photo = ImageTk.PhotoImage(img)
-                tk.Label(hero, image=self.logo_photo, bg="#0b1220").pack(pady=(0, 20))
-            except Exception:
-                tk.Label(
-                    hero,
-                    text="CRYPTO\nDASHBOARD",
-                    font=("Arial", 26, "bold"),
-                    fg=ACCENT_COLOR,
-                    bg="#0b1220",
-                ).pack(pady=(0, 20))
-        else:
-            tk.Label(
-                hero,
-                text="CRYPTO\nDASHBOARD",
-                font=("Arial", 26, "bold"),
-                fg=ACCENT_COLOR,
-                bg="#0b1220",
-            ).pack(pady=(0, 20))
+        self._cta_canvas = self._create_cta_button(cta_container)
+        self._cta_canvas.pack()
 
         tk.Label(
-            hero,
-            text="Premium Quant Terminal",
-            font=("Arial", 18, "bold"),
-            fg=TEXT_COLOR,
-            bg="#0b1220",
-        ).pack()
-        tk.Label(
-            hero,
-            text="Monitor spot majors, macro sentiment, and curated flows\nbefore committing capital.",
-            font=("Arial", 11),
-            fg=TEXT_SECONDARY,
-            bg="#0b1220",
-            justify="center",
-        ).pack(pady=(10, 25))
-
-        cta = tk.Button(
-            hero,
-            text="Launch Trading Desk",
-            font=("Arial", 12, "bold"),
-            bg=ACCENT_COLOR,
-            fg="#0c1016",
-            activebackground="#ffd84d",
-            activeforeground="#0c1016",
-            relief="flat",
-            padx=60,
-            pady=14,
-            command=self._handle_enter,
-        )
-        cta.pack(pady=(20, 10))
-
-        tk.Label(
-            hero,
-            text="Live Binance feeds • Last refreshed just now",
+            cta_container,
+            text="Powered by Binance real-time feeds • Python UI",
             font=("Arial", 9),
             fg=TEXT_SECONDARY,
-            bg="#0b1220",
-        ).pack()
+            bg=BG_COLOR,
+        ).pack(pady=(14, 0))
 
-        stats_panel = tk.Frame(hero_surface, bg="#04060f")
-        stats_panel.grid(row=0, column=1, sticky="nsew", padx=(0, 50), pady=(40, 20))
-        stats_panel.columnconfigure((0, 1), weight=1)
-        stats_panel.rowconfigure((0, 1), weight=1)
-
-        stat_data = [
-            ("BTC/USD", "$90,418", "+0.42%", ACCENT_COLOR),
-            ("ETH/USD", "$3,114", "-1.86%", COLOR_SELL),
-            ("Solana Heat", "78%", "Momentum", "#7dd3fc"),
-            ("Fear & Greed", "61", "Greed", "#a78bfa"),
-        ]
-
-        for idx, (title, value, change, color) in enumerate(stat_data):
-            frame = tk.Frame(
-                stats_panel,
-                bg="#0e1524",
-                padx=18,
-                pady=16,
-                highlightthickness=1,
-                highlightbackground="#1c2434",
-            )
-            frame.grid(row=idx // 2, column=idx % 2, sticky="nsew", padx=10, pady=10)
-            stats_panel.rowconfigure(idx // 2, weight=1)
-            tk.Label(
-                frame,
-                text=title,
-                font=("Arial", 10, "bold"),
-                fg=TEXT_SECONDARY,
-                bg="#0e1524",
-            ).pack(anchor="w")
-            tk.Label(
-                frame,
-                text=value,
-                font=("Arial", 18, "bold"),
-                fg=TEXT_COLOR,
-                bg="#0e1524",
-            ).pack(anchor="w", pady=(4, 0))
-            tk.Label(
-                frame,
-                text=change,
-                font=("Arial", 10, "bold"),
-                fg=color,
-                bg="#0e1524",
-            ).pack(anchor="w", pady=(2, 0))
-
-        ticker = tk.Frame(self.frame, bg="#05070f", pady=8)
-        ticker.pack(fill="x", side="bottom")
-        ticker_items = [
-            ("DXY", "102.4", "-0.32%"),
-            ("S&P Fut", "4,832", "+0.25%"),
-            ("BTC Dom", "59.3%", "+0.14%"),
-            ("Alt Heat", "1.18", "-1.02%"),
-        ]
-        for item in ticker_items:
-            block = tk.Frame(ticker, bg="#05070f", padx=18)
-            block.pack(side="left")
-            tk.Label(block, text=item[0], font=("Arial", 9, "bold"), fg=TEXT_SECONDARY, bg="#05070f").pack(anchor="w")
-            tk.Label(block, text=item[1], font=("Arial", 12, "bold"), fg=TEXT_COLOR, bg="#05070f").pack(anchor="w")
-            tk.Label(block, text=item[2], font=("Arial", 9, "bold"), fg=ACCENT_COLOR if "+" in item[2] else COLOR_SELL, bg="#05070f").pack(anchor="w")
-
-        strip = tk.Frame(self.frame, bg="#03040a")
-        strip.pack(fill="x", side="bottom")
-        canvas = tk.Canvas(strip, height=140, bg="#03040a", highlightthickness=0)
-        canvas.pack(fill="x", padx=40, pady=(0, 10))
-        width = 1200
-        candles = 30
-        spacing = width / candles
-        for i in range(candles):
-            x = 20 + i * spacing
-            high = 20 + (i % 5) * 5
-            low = high + 50 + (i % 3) * 8
-            open_y = high + 10
-            close_y = low - 10
-            bullish = i % 3 != 0
-            color = "#34d399" if bullish else "#f87171"
-            canvas.create_line(x, high, x, low, fill=color, width=2)
-            canvas.create_rectangle(x - 5, open_y, x + 5, close_y, fill=color, outline=color)
-
-    def _handle_enter(self):
-        if callable(self.on_enter):
-            self.on_enter()
+        self.root.update_idletasks()
 
     def destroy(self):
         if self.frame:
             self.frame.destroy()
             self.frame = None
+            self._bg_img = None
+            self.background_label = None
+        if self._resize_binding:
+            self.root.unbind("<Configure>", self._resize_binding)
+            self._resize_binding = None
+        self._current_size = None
+        self._cta_canvas = None
+
+    def _render_background(self, width=None, height=None):
+        if width is None or height is None:
+            width, height = self._target_size()
+        if width <= 1 or height <= 1:
+            return
+        new_size = (width, height)
+        if self._current_size == new_size:
+            return
+        if self.background_label is None:
+            self.background_label = tk.Label(self.frame, borderwidth=0)
+
+        bg_path = Path(__file__).resolve().parent.parent / "home.png"
+        offset_y = int(height * BACKGROUND_VERTICAL_OFFSET)
+        if bg_path.exists():
+            try:
+                img = Image.open(bg_path)
+                img = img.resize((width, height), Image.LANCZOS)
+                self._bg_img = ImageTk.PhotoImage(img)
+                self.background_label.config(image=self._bg_img, bg=BG_COLOR)
+                self.background_label.place(x=0, y=offset_y, width=width, height=height)
+                self._current_size = new_size
+                return
+            except Exception:
+                pass
+        self.background_label.config(image="", bg=BG_COLOR)
+        self.background_label.place(x=0, y=offset_y, width=width, height=height)
+        self._current_size = new_size
+
+    def _target_size(self):
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        if width <= 1 or height <= 1:
+            try:
+                default_w, default_h = WINDOW_SIZE.split("x")
+                width = int(default_w)
+                height = int(default_h)
+            except Exception:
+                width, height = 1200, 800
+        return width, height
+
+    def _on_root_resize(self, event):
+        if event.widget is self.root:
+            width = event.width
+            height = event.height
+            if width > 0 and height > 0:
+                self._render_background(width, height)
+
+    def _create_cta_button(self, parent):
+        if not self._cta_images:
+            self._cta_images = self._generate_cta_images()
+        normal_img, hover_img = self._cta_images
+        canvas = tk.Canvas(
+            parent,
+            width=normal_img.width(),
+            height=normal_img.height(),
+            highlightthickness=0,
+            bd=0,
+            bg=BG_COLOR,
+            cursor="hand2",
+        )
+        image_item = canvas.create_image(0, 0, anchor="nw", image=normal_img)
+        text_item = canvas.create_text(
+            normal_img.width() // 2,
+            normal_img.height() // 2,
+            text="Enter Market Dashboard",
+            font=("Arial", 18, "bold"),
+            fill="#0f1015",
+        )
+
+        def on_click(event=None):
+            self.on_enter()
+
+        def on_enter(event=None):
+            canvas.itemconfig(image_item, image=hover_img)
+            canvas.itemconfig(text_item, fill="#05060a")
+
+        def on_leave(event=None):
+            canvas.itemconfig(image_item, image=normal_img)
+            canvas.itemconfig(text_item, fill="#0f1015")
+
+        for seq in ("<Button-1>",):
+            canvas.bind(seq, on_click)
+        canvas.bind("<Enter>", on_enter)
+        canvas.bind("<Leave>", on_leave)
+
+        return canvas
+
+    def _generate_cta_images(self):
+        normal = self._create_button_image("#e6ae0a", "#c89b0e")
+        hover  = self._create_button_image("#f2cd68", "#e6ae0a")
+        return normal, hover
+
+    def _create_button_image(self, start_hex, end_hex):
+        width, height = CTA_SIZE
+        total_w = width + CTA_SHADOW_OFFSET * 2
+        total_h = height + CTA_SHADOW_OFFSET * 2
+
+        img = Image.new("RGBA", (total_w, total_h), (0, 0, 0, 0))
+
+        # Shadow
+        shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw_shadow = ImageDraw.Draw(shadow)
+        draw_shadow.rounded_rectangle(
+            (0, 0, width, height), radius=CTA_RADIUS, fill=(0, 0, 0, 160)
+        )
+        shadow = shadow.filter(ImageFilter.GaussianBlur(16))
+        img.paste(shadow, (CTA_SHADOW_OFFSET, CTA_SHADOW_OFFSET), shadow)
+
+        # Gradient button
+        gradient = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(gradient)
+        start_rgb = self._hex_to_rgb(start_hex)
+        end_rgb = self._hex_to_rgb(end_hex)
+        for y in range(height):
+            ratio = y / max(height - 1, 1)
+            r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * ratio)
+            g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
+            b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
+            draw.line([(0, y), (width, y)], fill=(r, g, b, 255))
+
+        mask = Image.new("L", (width, height), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.rounded_rectangle((0, 0, width, height), radius=CTA_RADIUS, fill=255)
+        gradient.putalpha(mask)
+
+        img.paste(gradient, (CTA_SHADOW_OFFSET, CTA_SHADOW_OFFSET), gradient)
+
+
+
+        return ImageTk.PhotoImage(img)
+
+    @staticmethod
+    def _hex_to_rgb(value):
+        value = value.lstrip("#")
+        return tuple(int(value[i : i + 2], 16) for i in (0, 2, 4))
