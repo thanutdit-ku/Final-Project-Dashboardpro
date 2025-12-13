@@ -43,8 +43,11 @@ from .components.volume_stats import VolumeStatsPanel
 from .components.trades_feed import TradesFeedPanel
 from .components.overview import OverviewPanel
 from .components.home_screen import HomeScreen
+from .components.wallet import WalletPanel
+from .utils.binance_api import get_current_price
 
 OVERVIEW_KEY = "overview"
+WALLET_KEY = "wallet"
 
 # Offline-friendly sample snapshot so headless mode still shows useful info.
 HEADLESS_SAMPLE_DATA = {
@@ -165,6 +168,7 @@ class CryptoDashboard:
         self.asset_components = {}
         self.symbol_buttons = {}
         self.overview_panel = None
+        self.wallet_panel = None
         
         self.panel_vars = {
             "book": tk.BooleanVar(value=True),
@@ -172,6 +176,13 @@ class CryptoDashboard:
             "trades": tk.BooleanVar(value=True),
         }
         self.panel_trace_ids = {}
+        self.wallet_holdings = {
+            "BTC": {"symbol": "btcusdt", "amount": 0.42},
+            "ETH": {"symbol": "ethusdt", "amount": 3.1},
+            "SOL": {"symbol": "solusdt", "amount": 55},
+            "BNB": {"symbol": "bnbusdt", "amount": 12},
+            "ADA": {"symbol": "adausdt", "amount": 1500},
+        }
         
         self.load_preferences()
         
@@ -225,6 +236,8 @@ class CryptoDashboard:
                 valid_symbols = {s['symbol'] for s in SYMBOLS}
                 if saved_selection == OVERVIEW_KEY:
                     self.active_symbol = OVERVIEW_KEY
+                elif saved_selection == WALLET_KEY:
+                    self.active_symbol = WALLET_KEY
                 elif saved_selection in valid_symbols:
                     self.active_symbol = saved_selection
                 else:
@@ -303,6 +316,7 @@ class CryptoDashboard:
         
         self._add_section_header("OVERVIEW")
         self._create_overview_tab()
+        self._create_wallet_tab()
         self._add_section_header("MARKETS")
         for sym in SYMBOLS:
             self._create_market_card(sym)
@@ -374,6 +388,57 @@ class CryptoDashboard:
             if self.active_symbol == OVERVIEW_KEY:
                 return
             self.active_symbol = OVERVIEW_KEY
+            self.setup_sidebar()
+            self.setup_main_view()
+
+        widgets = (tab, title, subtitle)
+        for w in widgets:
+            w.bind("<Button-1>", on_click)
+
+    def _create_wallet_tab(self):
+        is_active = self.active_symbol == WALLET_KEY
+        container = tk.Frame(self.sidebar, bg=self.sidebar["bg"])
+        container.pack(fill=tk.X, padx=18, pady=(0, 8))
+
+        bg_color = ACCENT_COLOR if is_active else SIDEBAR_CARD_BG
+        fg_color = SIDEBAR_BG if is_active else TEXT_COLOR
+        border_color = ACCENT_COLOR if is_active else BORDER_COLOR
+
+        tab = tk.Frame(
+            container,
+            bg=bg_color,
+            cursor="hand2",
+            highlightthickness=1,
+            highlightbackground=border_color,
+            padx=16,
+            pady=10,
+        )
+        tab.pack(fill=tk.X)
+
+        title = tk.Label(
+            tab,
+            text="WALLET",
+            font=("Arial", 12, "bold"),
+            bg=bg_color,
+            fg=fg_color,
+            anchor="w",
+        )
+        title.pack(fill=tk.X)
+
+        subtitle = tk.Label(
+            tab,
+            text="Portfolio Overview",
+            font=("Arial", 9),
+            bg=bg_color,
+            fg=SIDEBAR_BG if is_active else TEXT_SECONDARY,
+            anchor="w",
+        )
+        subtitle.pack(fill=tk.X, pady=(2, 0))
+
+        def on_click(event=None):
+            if self.active_symbol == WALLET_KEY:
+                return
+            self.active_symbol = WALLET_KEY
             self.setup_sidebar()
             self.setup_main_view()
 
@@ -698,6 +763,23 @@ class CryptoDashboard:
             self.overview_panel.grid_remove()
             self.overview_panel.stop()
 
+    def _show_wallet_view(self):
+        if not self.wallet_panel:
+            self.wallet_panel = WalletPanel(
+                self.scrollable_frame,
+                holdings=self.wallet_holdings,
+                price_fetcher=get_current_price,
+                fallback_prices=HEADLESS_SAMPLE_DATA,
+            )
+        self.wallet_panel.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
+        self.scrollable_frame.rowconfigure(0, weight=1)
+        self.wallet_panel.start()
+
+    def _hide_wallet_view(self):
+        if self.wallet_panel:
+            self.wallet_panel.grid_remove()
+            self.wallet_panel.stop()
+
     def setup_main_view(self):
         # 1. REMOVE rows of inactive symbols
         # Use list to avoid runtime error during deletion
@@ -715,10 +797,16 @@ class CryptoDashboard:
                 del self.asset_components[sym]
         
         if self.active_symbol == OVERVIEW_KEY:
+            self._hide_wallet_view()
             self._show_overview_view()
+            return
+        elif self.active_symbol == WALLET_KEY:
+            self._hide_overview_view()
+            self._show_wallet_view()
             return
         else:
             self._hide_overview_view()
+            self._hide_wallet_view()
         
         # 2. CREATE or UPDATE rows for active symbols
         # Sort by SYMBOLS order
@@ -747,6 +835,11 @@ class CryptoDashboard:
         if self.overview_panel:
             try:
                 self.overview_panel.stop()
+            except Exception:
+                pass
+        if self.wallet_panel:
+            try:
+                self.wallet_panel.stop()
             except Exception:
                 pass
         
