@@ -9,6 +9,17 @@ Desktop dashboard for monitoring crypto markets in real time. Tkinter provides t
 - Sidebar for toggling panels, switching symbols, and storing preferences.
 - Headless option that prints the latest 24h snapshot in the terminal.
 
+## Example Screens
+Take a quick look at how the desktop app is laid out. These screenshots live in `project_UI/` so you can swap in your own branding later.
+
+![Home screen](project_UI/Homepage.png)
+
+![Market depth and trades](project_UI/market1.png)
+
+![Overview cards](project_UI/Overview_page.png)
+
+![User wallet view](project_UI/User_wallet_page.png)
+
 ## Tech Stack
 - Python 3.10+
 - Tkinter
