@@ -193,8 +193,14 @@ class CryptoDashboard:
         self.home_screen.show()
 
     def enter_dashboard(self):
+        # Always land on the overview when leaving the splash screen
+        self.active_symbol = OVERVIEW_KEY
         if not self.dashboard_initialized:
             self._setup_dashboard_ui()
+        else:
+            # If the dashboard already exists, refresh it to reflect the overview selection
+            self.setup_sidebar()
+            self.setup_main_view()
         if self.home_screen:
             self.home_screen.destroy()
 

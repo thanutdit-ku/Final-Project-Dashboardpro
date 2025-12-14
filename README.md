@@ -51,12 +51,5 @@ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python3 main.py
 ```
-
-Extra launch modes:
-```bash
-python3 main.py --headless
-python3 main.py --force-gui
-```
-
 ---
 Created by **Thanutdit Jiravichalert (Student ID 6810545662)** for **Programming 1 (01219114-01219115)**.

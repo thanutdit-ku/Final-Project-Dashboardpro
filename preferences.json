@@ -3,8 +3,8 @@
     "ETH": false,
     "SOL": false,
     "BNB": false,
-    "ADA": false,
-    "ActiveSelection": "wallet",
+    "ADA": true,
+    "ActiveSelection": "adausdt",
     "OrderBook": true,
     "Chart": true,
     "RecentTrades": true
