@@ -7,6 +7,7 @@ from functools import partial
 
 import requests
 import tkinter as tk
+from tkinter import ttk
 from PIL import Image, ImageTk
 
 # Allow running both as `python -m crypto_dashboard.main` and `python main.py`.
@@ -161,6 +162,9 @@ class CryptoDashboard:
         self.sidebar = None
         self.main_container = None
         self.scrollable_frame = None
+        self.loading_overlay = None
+        self.loading_progress = None
+        self.initial_view_loaded = False
         
         # State
         self.active_symbol = None  # Currently selected symbol string e.g. "btcusdt"
@@ -224,6 +228,7 @@ class CryptoDashboard:
 
         self.dashboard_initialized = True
         self.setup_sidebar()
+        self._show_initial_loading()
         self.setup_main_view()
 
     def load_preferences(self):
@@ -281,12 +286,57 @@ class CryptoDashboard:
                 json.dump(prefs, f, indent=4)
         except Exception as e:
             print(f"Error saving prefs: {e}")
+    
+    def _show_initial_loading(self):
+        if self.loading_overlay or not self.main_container:
+            return
+        self.loading_overlay = tk.Frame(
+            self.main_container,
+            bg=BG_COLOR,
+        )
+        self.loading_overlay.place(relx=0.5, rely=0.5, anchor="center")
+
+        label = tk.Label(
+            self.loading_overlay,
+            text="Preparing real-time dashboard...",
+            font=("Arial", 13, "bold"),
+            fg=TEXT_COLOR,
+            bg=BG_COLOR,
+        )
+        label.pack(pady=(0, 8))
+
+        self.loading_progress = ttk.Progressbar(
+            self.loading_overlay,
+            mode="indeterminate",
+            length=220,
+        )
+        self.loading_progress.pack()
+        try:
+            self.loading_progress.start(12)
+        except tk.TclError:
+            pass
+
+    def _hide_initial_loading(self):
+        if self.loading_progress:
+            try:
+                self.loading_progress.stop()
+            except tk.TclError:
+                pass
+            self.loading_progress = None
+        if self.loading_overlay:
+            self.loading_overlay.destroy()
+            self.loading_overlay = None
+    
+    def _initial_load_complete(self):
+        if not self.initial_view_loaded:
+            self.initial_view_loaded = True
+            self._hide_initial_loading()
             
     def setup_sidebar(self):
         for widget in self.sidebar.winfo_children():
             widget.destroy()
 
-        logo_path = Path(__file__).resolve().parent / "crypto-Photoroom.png"
+        logo_path = Path(__file__).resolve().parent / "components" / "crypto-Photoroom.png"
         if logo_path.exists():
             try:
                 img = Image.open(logo_path)
@@ -799,10 +849,12 @@ class CryptoDashboard:
         if self.active_symbol == OVERVIEW_KEY:
             self._hide_wallet_view()
             self._show_overview_view()
+            self._initial_load_complete()
             return
         elif self.active_symbol == WALLET_KEY:
             self._hide_overview_view()
             self._show_wallet_view()
+            self._initial_load_complete()
             return
         else:
             self._hide_overview_view()
@@ -827,6 +879,8 @@ class CryptoDashboard:
             frame = self.asset_frames[sym]
             frame.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
             self.scrollable_frame.rowconfigure(0, weight=1)
+
+        self._initial_load_complete()
 
     def on_closing(self):
         print("Closing application...")

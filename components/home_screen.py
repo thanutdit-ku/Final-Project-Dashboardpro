@@ -74,7 +74,7 @@ class HomeScreen:
         if self.background_label is None:
             self.background_label = tk.Label(self.frame, borderwidth=0)
 
-        bg_path = Path(__file__).resolve().parent.parent / "home.png"
+        bg_path = Path(__file__).resolve().parent / "home.png"
         offset_y = int(height * BACKGROUND_VERTICAL_OFFSET)
         if bg_path.exists():
             try:

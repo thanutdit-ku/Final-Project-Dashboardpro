@@ -1,14 +1,15 @@
 import tkinter as tk
 from tkinter import ttk
 import requests
+from datetime import datetime
+import websocket
+import json
 import pandas as pd
 import mplfinance as mpf
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import threading
 import time
-import websocket
-import json
 from ..config import (
     REST_BASE_URL,
     WS_BASE_URL,
@@ -36,7 +37,10 @@ class ChartPanel(tk.Frame):
             highlightbackground=BORDER_COLOR,
         )
         self.symbol = symbol.lower()
+        self.poll_thread = None
+        self.ws_thread = None
         self.ws = None
+        self.ws_failed = False
         
         # Header
         box_color = CARD_HEADER_BG
@@ -83,12 +87,16 @@ class ChartPanel(tk.Frame):
         
         self.is_active = False
         self.data = pd.DataFrame()
+        self.poll_interval = 6  # seconds between REST refreshes
+        self.last_draw_time = 0
+        self.draw_interval = 0.25
         
     def start(self):
-        if self.is_active: return
+        if self.is_active:
+            return
         self.is_active = True
-        self.last_draw_time = 0
-        self.draw_interval = 0.2 # Max 5 FPS
+        self.ws_failed = False
+        self.ws_thread = None
         
         # Initial fetch
         threading.Thread(target=self._fetch_initial_history, daemon=True).start()
@@ -116,8 +124,9 @@ class ChartPanel(tk.Frame):
 
             # Parse into DataFrame
             df = pd.DataFrame(raw, columns=['Open time', 'Open', 'High', 'Low', 'Close', 'Volume', 'Close time', 'Quote asset volume', 'Number of trades', 'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore'])
-            df['Open time'] = pd.to_datetime(df['Open time'], unit='ms')
+            df['Open time'] = pd.to_datetime(df['Open time'], unit='ms', utc=True)
             df.set_index('Open time', inplace=True)
+            df.index = self._localize_index(df.index)
             
             # Convert to float
             for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
@@ -128,74 +137,166 @@ class ChartPanel(tk.Frame):
             # Schedule plot on main thread
             self.after(0, self._plot)
             
-            # Start WebSocket for live updates AFTER initial fetch
-            threading.Thread(target=self._run_socket, daemon=True).start()
+            if not self.ws_failed:
+                self._start_websocket()
+            else:
+                self._ensure_polling()
             
         except Exception as e:
             print(f"Chart Error: {e}")
 
-    # ADDED: WebSocket kline handler
+    def _poll_loop(self):
+        while self.is_active:
+            self._fetch_latest_snapshot()
+            time.sleep(self.poll_interval)
+    
+    def _ensure_polling(self):
+        if self.poll_thread and self.poll_thread.is_alive():
+            return
+        print("Chart REST poller engaged.")
+        self.poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self.poll_thread.start()
+
+    def _fetch_latest_snapshot(self):
+        if not self.is_active:
+            return
+        try:
+            url = f"{REST_BASE_URL}/api/v3/klines"
+            sym = self.symbol.strip().upper()
+            params = {"symbol": sym, "interval": self.interval, "limit": 60}
+            resp = requests.get(url, params=params, timeout=5)
+            resp.raise_for_status()
+            raw = resp.json()
+            if not isinstance(raw, list):
+                return
+            df = pd.DataFrame(
+                raw,
+                columns=[
+                    "Open time",
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume",
+                    "Close time",
+                    "Quote asset volume",
+                    "Number of trades",
+                    "Taker buy base asset volume",
+                    "Taker buy quote asset volume",
+                    "Ignore",
+                ],
+            )
+            df["Open time"] = pd.to_datetime(df["Open time"], unit="ms", utc=True)
+            df.set_index("Open time", inplace=True)
+            df.index = self._localize_index(df.index)
+            for col in ["Open", "High", "Low", "Close", "Volume"]:
+                df[col] = df[col].astype(float)
+            self.data = df
+            self.after(0, self._plot)
+        except Exception as exc:
+            print(f"Chart REST update failed: {exc}")
+    
+    def _localize_index(self, index):
+        try:
+            local_tz = datetime.now().astimezone().tzinfo
+            if getattr(index, "tz", None) is None:
+                index = index.tz_localize("UTC")
+            if local_tz is not None:
+                index = index.tz_convert(local_tz)
+            return index.tz_localize(None)
+        except Exception:
+            try:
+                return index.tz_localize(None)
+            except Exception:
+                return index
+    
+    def _start_websocket(self):
+        if self.ws_failed:
+            self._ensure_polling()
+            return
+        if self.ws_thread and self.ws_thread.is_alive():
+            return
+        self.ws_thread = threading.Thread(target=self._run_socket, daemon=True)
+        self.ws_thread.start()
+
     def _run_socket(self):
         ws_url = f"{WS_BASE_URL}/{self.symbol}@kline_{self.interval}"
-        
-        self.ws = websocket.WebSocketApp(
-            ws_url,
-            on_message=self.on_message,
-            on_error=lambda ws, err: print(f"Chart WS Error: {err}"),
-            on_close=lambda ws, s, m: print(f"Chart WS Closed {self.symbol}"),
-            on_open=lambda ws: print(f"Chart WS Open {self.symbol}")
-        )
-        self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
-
-    # MODIFIED: chart update logic with throttling
-    def on_message(self, ws, message):
-        if not self.is_active: return
+        print(f"Chart WS connecting to {ws_url}")
         try:
-            data = json.loads(message)
-            if data.get('e') == 'kline':
-                k = data['k']
-                
-                # Parse candle data
-                t = pd.to_datetime(k['t'], unit='ms')
-                o = float(k['o'])
-                h = float(k['h'])
-                l = float(k['l'])
-                c = float(k['c'])
-                v = float(k['v'])
-                
-                # Update DataFrame (CURRENT candle update)
-                if t in self.data.index:
-                    # Update existing row using .at for scalar access (safer/faster)
-                    self.data.at[t, 'Open'] = o
-                    self.data.at[t, 'High'] = h
-                    self.data.at[t, 'Low'] = l
-                    self.data.at[t, 'Close'] = c
-                    self.data.at[t, 'Volume'] = v
-                else:
-                    # New candle - Append
-                    new_row_data = {
-                        'Open': o, 'High': h, 'Low': l, 'Close': c, 'Volume': v
-                    }
-                    # Construct DataFrame aligned with existing columns
-                    # We create a single-row DataFrame
-                    new_df = pd.DataFrame(new_row_data, index=[t])
-                    # Reindex to match self.data columns, filling missing with 0
-                    new_df = new_df.reindex(columns=self.data.columns, fill_value=0)
-                    
-                    self.data = pd.concat([self.data, new_df])
-                
-                # Prune old data
-                if len(self.data) > 60:
-                     self.data = self.data.iloc[-50:]
-                
-                # Throttling to prevent GUI freeze
-                current_time = time.time()
-                if current_time - self.last_draw_time > self.draw_interval:
-                    self.last_draw_time = current_time
-                    self.after(0, self._plot)
-                
-        except Exception as e:
-            print(f"Chart Message Error: {e}")
+            self.ws = websocket.WebSocketApp(
+                ws_url,
+                on_message=self.on_message,
+                on_error=self._ws_error,
+                on_close=self._ws_close,
+                on_open=self._ws_open,
+            )
+            self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
+        except Exception as exc:
+            self._ws_error(self.ws, exc)
+
+    def _ws_open(self, ws):
+        print(f"Chart WS Open {self.symbol.upper()}")
+
+    def _ws_close(self, ws, status, msg):
+        print(f"Chart WS Closed {self.symbol.upper()} status={status} msg={msg}")
+        self.ws_thread = None
+        self._schedule_rest_fallback()
+
+    def _ws_error(self, ws, err):
+        print(f"Chart WS Error {self.symbol.upper()}: {err}")
+        self.ws_thread = None
+        self._schedule_rest_fallback()
+
+    def _schedule_rest_fallback(self):
+        if not self.ws_failed:
+            print("Falling back to REST polling for chart updates.")
+        self.ws_failed = True
+        self.ws = None
+        self.ws_thread = None
+        self._ensure_polling()
+
+    def on_message(self, ws, message):
+        if not self.is_active:
+            return
+        try:
+            payload = json.loads(message)
+            if payload.get("e") != "kline":
+                return
+            kline = payload.get("k")
+            if not kline:
+                return
+            t = pd.to_datetime(kline["t"], unit="ms", utc=True)
+            t = self._localize_index(pd.DatetimeIndex([t]))[0]
+            o = float(kline["o"])
+            h = float(kline["h"])
+            l = float(kline["l"])
+            c = float(kline["c"])
+            v = float(kline["v"])
+
+            if t in self.data.index:
+                self.data.at[t, "Open"] = o
+                self.data.at[t, "High"] = h
+                self.data.at[t, "Low"] = l
+                self.data.at[t, "Close"] = c
+                self.data.at[t, "Volume"] = v
+            else:
+                new_df = pd.DataFrame(
+                    {"Open": o, "High": h, "Low": l, "Close": c, "Volume": v},
+                    index=[t],
+                )
+                new_df.index = self._localize_index(new_df.index)
+                new_df = new_df.reindex(columns=self.data.columns, fill_value=0)
+                self.data = pd.concat([self.data, new_df])
+
+            if len(self.data) > 60:
+                self.data = self.data.iloc[-60:]
+
+            now = time.time()
+            if now - self.last_draw_time > self.draw_interval:
+                self.last_draw_time = now
+                self.after(0, self._plot)
+        except Exception as exc:
+            print(f"Chart WS message parse failed: {exc}")
 
     def _plot(self):
         try:
@@ -229,4 +330,11 @@ class ChartPanel(tk.Frame):
         
     def stop(self):
         self.is_active = False
-        if self.ws: self.ws.close()
+        self.poll_thread = None
+        if self.ws:
+            try:
+                self.ws.close()
+            except Exception:
+                pass
+        self.ws = None
+        self.ws_thread = None

@@ -1,10 +1,10 @@
 {
     "BTC": false,
     "ETH": false,
-    "SOL": false,
+    "SOL": true,
     "BNB": false,
     "ADA": false,
-    "ActiveSelection": "overview",
+    "ActiveSelection": "solusdt",
     "OrderBook": true,
     "Chart": true,
     "RecentTrades": true

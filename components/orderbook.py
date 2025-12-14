@@ -1,11 +1,10 @@
-import tkinter as tk
-from tkinter import ttk
-import websocket
-import json
 import threading
+import time
+
+import requests
+import tkinter as tk
+
 from ..config import (
-    WS_BASE_URL,
-    WS_SSL_OPTIONS,
     CARD_COLOR,
     CARD_HEADER_BG,
     BORDER_COLOR,
@@ -16,9 +15,13 @@ from ..config import (
     COLOR_SELL,
     FONT_SUBTITLE,
     FONT_NUMBERS,
+    REST_BASE_URL,
 )
 
 class OrderBookPanel(tk.Frame):
+    ROW_COUNT = 28
+    REFRESH_INTERVAL = 1.0  # seconds between REST snapshots
+
     def __init__(self, parent, symbol):
         super().__init__(
             parent,
@@ -30,7 +33,7 @@ class OrderBookPanel(tk.Frame):
         )
         self.symbol = symbol.lower()
         self.is_active = False
-        self.ws = None
+        self.fetch_thread = None
         
         # Header
         box_color = CARD_HEADER_BG
@@ -91,7 +94,7 @@ class OrderBookPanel(tk.Frame):
         self.bid_rows = []
         self.ask_rows = []
         
-        for _ in range(10): # Top 10
+        for _ in range(self.ROW_COUNT):
             self.bid_rows.append(self._create_row(self.bids_frame))
             self.ask_rows.append(self._create_row(self.asks_frame))
             
@@ -119,35 +122,39 @@ class OrderBookPanel(tk.Frame):
         return (price_lbl, amt_lbl)
         
     def start(self):
-        if self.is_active: return
+        if self.is_active:
+            return
         self.is_active = True
-        
-        # Helper to run in thread
-        threading.Thread(target=self._run_socket, daemon=True).start()
-        
-    def _run_socket(self):
-        # https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams#partial-book-depth-streams
-        ws_url = f"{WS_BASE_URL}/{self.symbol}@depth10@100ms"
-        self.ws = websocket.WebSocketApp(
-            ws_url,
-            on_message=self.on_message,
-            on_error=lambda ws, err: print(f"OB Error: {err}"),
-            on_close=lambda ws, s, m: print("OB Closed")
+        self.fetch_thread = threading.Thread(
+            target=self._fetch_loop,
+            daemon=True,
         )
-        self.ws.run_forever(sslopt=WS_SSL_OPTIONS)
-        
+        self.fetch_thread.start()
+
     def stop(self):
         self.is_active = False
-        if self.ws: self.ws.close()
-        
-    def on_message(self, ws, message):
-        if not self.is_active: return
+
+    def _fetch_loop(self):
+        while self.is_active:
+            snapshot = self._fetch_order_book()
+            if snapshot:
+                self.after(0, self.update_ui, snapshot)
+            time.sleep(self.REFRESH_INTERVAL)
+
+    def _fetch_order_book(self):
         try:
-            data = json.loads(message)
-            self.after(0, self.update_ui, data)
-        except Exception:
-            pass
-            
+            limit = min(max(self.ROW_COUNT, 20), 100)
+            resp = requests.get(
+                f"{REST_BASE_URL}/api/v3/depth",
+                params={"symbol": self.symbol.upper(), "limit": limit},
+                timeout=4,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:
+            print(f"Order book fetch failed: {exc}")
+            return None
+
     def update_ui(self, data):
         if not self.is_active: return
         bids = data.get('bids', [])
