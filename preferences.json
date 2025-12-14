@@ -1,0 +1,11 @@
+{
+    "BTC": false,
+    "ETH": false,
+    "SOL": false,
+    "BNB": false,
+    "ADA": false,
+    "ActiveSelection": "overview",
+    "OrderBook": true,
+    "Chart": true,
+    "RecentTrades": true
+}
